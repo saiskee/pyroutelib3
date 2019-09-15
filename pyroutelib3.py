@@ -45,6 +45,12 @@ from datetime import datetime
 from collections import OrderedDict
 from urllib.request import urlretrieve
 
+try:
+    import osmread
+    OSMREAD_AVAILABLE = True
+except ImportError:
+    OSMREAD_AVAILABLE = False
+
 __title__ = "pyroutelib3"
 __description__ = "Library for simple routing on OSM data"
 __url__ = "https://github.com/MKuranowski/pyroutelib3"
@@ -107,7 +113,8 @@ def _tileBoundary(x, y, z):
 
 class Datastore:
     """Object for storing routing data with basic OSM parsing functionality"""
-    def __init__(self, transport, localfile=False, expire_data=30, storage_class=dict):
+    def __init__(self, transport, localfile=False, \
+                 expire_data=30, storage_class=dict, use_osmread=False):
         """Initialise an OSM-file parser"""
         # Routing data
         self.routing = storage_class()
@@ -119,6 +126,14 @@ class Datastore:
         self.tiles = storage_class()
         self.expire_data = 86400 * expire_data # expire_data is in days, we preform calculations in seconds
         self.localFile = bool(localfile)
+
+        # Parsing/Storage data
+        self.storage_class = storage_class
+        self.use_osmread = use_osmread
+
+        if self.use_osmread and not OSMREAD_AVAILABLE:
+            raise RuntimeError("pyroutelib3 was asked to use osmread, "+
+                               "which wasn't imported (check if it's installed)")
 
         # Dict-type custom transport weights
         if isinstance(transport, dict):
@@ -224,7 +239,9 @@ class Datastore:
         """Return nodes, ways and realations of given file
            Only highway=* and railway=* ways are returned, and
            only type=restriction (and type=restriction:<transport type>) are returned"""
-        nodes, ways, relations = {}, {}, {}
+        nodes = self.storage_class()
+        ways = self.storage_class()
+        relations = self.storage_class()
 
         # Check if a file-like object was passed
         if hasattr(file, "read"): fp = file
@@ -256,9 +273,47 @@ class Datastore:
 
         return nodes, ways, relations
 
+    def parseOsmFileOsmread(self, file):
+        nodes = self.storage_class()
+        ways = self.storage_class()
+        relations = self.storage_class()
+
+        for thing in osmread.parse_file(file):
+
+            # Convert thing to a dict and normalize data
+            data = thing._asdict()
+
+            data["tag"] = data.pop("tags")
+            data = self._attributes(data)
+
+            if isinstance(thing, osmread.Node):
+                nodes[data["id"]] = data
+
+            # Store only potentially routable ways
+            elif isinstance(thing, osmread.Way) and \
+                   (data["tag"].get("highway") or data["tag"].get("railway")):
+
+                data["nd"] = data.pop("nodes")
+                ways[data["id"]] = data
+
+            # Store only potential turn restrictions
+            elif isinstance(thing, osmread.Relation) and \
+                    data["tag"].get("type", "").startswith("restriction"):
+
+                data["member"] = [
+                    {"role": i.role, "ref": i.member_id} for i in data.pop("members")
+                ]
+
+                relations[data["id"]] = data
+
     def loadOsm(self, file):
         """Load data from OSM file to self"""
-        nodes, ways, relations = self.parseOsmFile(file)
+
+        if self.use_osmread:
+            nodes, ways, relations = self.parseOsmFileOsmread(file)
+
+        else:
+            nodes, ways, relations = self.parseOsmFile(file)
 
         for wayId, wayData in ways.items():
             wayNodes = []
