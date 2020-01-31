@@ -212,7 +212,8 @@ class Datastore:
             downloadedSecondsAgo = time.time() - os.path.getmtime(filename)
         except OSError:
             downloadedSecondsAgo = math.inf
-
+        
+        # Download data into file
         if downloadedSecondsAgo >= self.expire_data:
             left, bottom, right, top = _tileBoundary(x, y, 15)
             urlretrieve("https://api.openstreetmap.org/api/0.6/map?bbox={0},{1},{2},{3}".format(left, bottom, right, top), filename)
@@ -220,7 +221,7 @@ class Datastore:
         self.loadOsm(filename)
 
     def parseOsmFile(self, file):
-        """Return nodes, ways and realations of given file
+        """Return nodes, ways and relations of given file
            Only highway=* and railway=* ways are returned, and
            only type=restriction (and type=restriction:<transport type>) are returned"""
         nodes = self.storage_class()
@@ -270,7 +271,7 @@ class Datastore:
 
         for relId, relData in relations.items():
             try:
-                # Ignore reltions which are not restrictions
+                # Ignore relations which are not restrictions
                 if relData["tag"].get("type") not in ("restriction", "restriction:" + self.transport):
                     continue
 
@@ -536,7 +537,7 @@ class Router(Datastore):
             count += 1
             _closeNode = True
 
-            # Pop first item from queue for routing. If queue it's empty - it means no route exists
+            # Pop first item from queue for routing. If queue is empty - it means no route exists
             if len(_queue) > 0:
                 nextItem = _queue.pop(0)
             else:
@@ -552,7 +553,7 @@ class Router(Datastore):
             if consideredNode == end:
                 return "success", [int(i) for i in nextItem["nodes"].split(",")]
 
-            # Check if we preform a mandatory turn
+            # Check if we perform a mandatory turn
             if nextItem["mandatoryNodes"]:
                 _closeNode = False
                 nextNode = nextItem["mandatoryNodes"].pop(0)
