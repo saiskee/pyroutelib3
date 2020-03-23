@@ -377,6 +377,7 @@ class Datastore:
             # Check if nodes have dicts for storing travel costs
             if node1Id not in self.routing: self.routing[node1Id] = {}
             if node2Id not in self.routing: self.routing[node2Id] = {}
+            
 
             # Is way traversible forward?
             if oneway not in ["-1", "reverse"]:
@@ -419,6 +420,9 @@ class Datastore:
         """Display some info about the loaded data"""
         print("Loaded %d nodes" % len(list(self.rnodes)))
         print("Loaded %d %s routes" % (len(list(self.routing)), self.transport))
+    
+    def get_rnodes(self):
+        return self.rnodes
 
 class Router(Datastore):
     def __getattr__(self, name):
